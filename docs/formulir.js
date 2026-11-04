@@ -272,8 +272,8 @@
 
   function hNpsn() {
     var h = '<div class="' + kelasBidang('npsn') + '" id="b-npsn"><label for="npsn">NPSN Sekolah' + tandaWajib() + '</label>' +
-      '<p class="petunjuk" id="p-npsn">Masukkan 8 digit Nomor Pokok Sekolah Nasional. Nama sekolah akan muncul otomatis.</p>' +
-      '<div class="npsn-baris"><input type="text" id="npsn" name="npsn" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="Contoh: 20100123" value="' + esc(D.npsn || '') + '"' + aria('npsn', true) + '>' +
+      '<p class="petunjuk" id="p-npsn">Masukkan 8 karakter Nomor Pokok Sekolah Nasional (angka, atau huruf dan angka seperti P9984565). Nama sekolah akan muncul otomatis.</p>' +
+      '<div class="npsn-baris"><input type="text" id="npsn" name="npsn" inputmode="text" autocapitalize="characters" maxlength="8" autocomplete="off" spellcheck="false" placeholder="Contoh: 20100123 / P9984565" value="' + esc(D.npsn || '') + '"' + aria('npsn', true) + '>' +
       '<button type="button" class="tombol tombol-garis" data-aksi="cari-npsn">Cari</button></div>' +
       '<div id="npsn-hasil" aria-live="polite">' + hHasilNpsn() + '</div>' + pesanGalat('npsn') + '</div>';
     if (D.sekolahManual === true) h += fTeks('namaSekolahManual', 'Nama Sekolah (isi manual)', { maks: 150, petunjuk: 'Data ini akan <strong>diverifikasi</strong> oleh petugas ULD.' });
@@ -442,7 +442,7 @@
   // ---------------- NPSN ----------------
   function cariNpsn() {
     var n = String(D.npsn || '').trim();
-    if (!/^\d{8}$/.test(n)) { sekolah = { status: '', npsn: '' }; perbaruiNpsn(); return; }
+    if (!L.npsnValid(n)) { sekolah = { status: '', npsn: '' }; perbaruiNpsn(); return; }
     if (sekolah.npsn === n && (sekolah.status === 'ditemukan' || sekolah.status === 'mencari')) return;
     sekolah = { status: 'mencari', npsn: n }; perbaruiNpsn();
     api('cariSekolah', n).then(function (r) {
@@ -558,7 +558,7 @@
   app.addEventListener('input', function (ev) {
     var t = ev.target, k = t.name; if (!k || t.type === 'radio' || t.type === 'checkbox' || t.type === 'file') return;
     if (k === 'npsn') {
-      t.value = t.value.replace(/\D/g, '').slice(0, 8);
+      t.value = L.normalisasiNPSN(t.value).slice(0, 8);
       if (t.value !== D.npsn) { D.namaSekolah = ''; if (sekolah.status !== 'tidak' || t.value.length === 8) { sekolah = { status: '', npsn: '' }; } }
       D.npsn = t.value; perbaruiNpsn();
       clearTimeout(timerNpsn);

@@ -57,6 +57,14 @@ function buatLogika(CFG) {
   function rapikan(v) { return isi(v) ? String(v).replace(/\s+/g, ' ').trim() : ''; }
   function dalam(v, daftar) { return daftar.indexOf(v) !== -1; }
 
+  /**
+   * NPSN: 8 karakter berupa angka, atau kombinasi huruf & angka (mis. PKBM: P9984565).
+   * Spasi/tanda baca dibuang dan huruf dijadikan kapital.
+   */
+  function normalisasiNPSN(v) { return String(v || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase(); }
+  function npsnValid(v) { return /^(?=.*\d)[A-Z0-9]{8}$/.test(normalisasiNPSN(v)); }
+  var PESAN_NPSN = 'NPSN terdiri dari 8 karakter: angka (contoh 20100123) atau huruf dan angka (contoh P9984565).';
+
   /** Nomor HP Indonesia → format baku 628xxxxxxxxx. Kembalikan '' bila tidak valid. */
   function normalisasiHP(v) {
     if (!isi(v)) return '';
@@ -285,10 +293,10 @@ function buatLogika(CFG) {
       if (perluNPSN(d)) {
         if (d.sekolahManual === true) {
           teks('namaSekolahManual', true, 3, 150);
-          if (isi(d.npsn) && !/^\d{8}$/.test(String(d.npsn).trim())) e.npsn = 'NPSN terdiri dari 8 digit angka.';
+          if (isi(d.npsn) && !npsnValid(d.npsn)) e.npsn = PESAN_NPSN;
         } else {
           if (!isi(d.npsn)) e.npsn = 'NPSN sekolah wajib diisi.';
-          else if (!/^\d{8}$/.test(String(d.npsn).trim())) e.npsn = 'NPSN terdiri dari 8 digit angka.';
+          else if (!npsnValid(d.npsn)) e.npsn = PESAN_NPSN;
           else if (ctx.cekSekolah !== false && !isi(d.namaSekolah)) e.npsn = 'Sekolah belum ditemukan. Periksa kembali NPSN yang dimasukkan.';
         }
       }
@@ -360,7 +368,7 @@ function buatLogika(CFG) {
     o.namaWali = rapikan(w.nama);
     o.hubunganWali = rapikan(w.hubungan);
     o.hpWali = normalisasiHP(w.hp);
-    o.npsn = rapikan(d.npsn);
+    o.npsn = normalisasiNPSN(d.npsn);
     if (d.sekolahManual === true) { o.namaSekolah = rapikan(d.namaSekolahManual); o.statusSekolah = 'PERLU VERIFIKASI (NPSN tidak ditemukan)'; }
     else { o.namaSekolah = rapikan(d.namaSekolah); o.statusSekolah = 'Terverifikasi NPSN'; }
     var u = hitungUsia(d.tanggalLahir, ctx.tanggalAcuan);
@@ -375,7 +383,7 @@ function buatLogika(CFG) {
 
   return {
     OPSI: OPSI, LANGKAH: LANGKAH, PETUNJUK_BERKAS: PETUNJUK_BERKAS,
-    isi: isi, rapikan: rapikan, normalisasiHP: normalisasiHP, tampilHP: tampilHP, emailValid: emailValid,
+    isi: isi, rapikan: rapikan, normalisasiNPSN: normalisasiNPSN, npsnValid: npsnValid, normalisasiHP: normalisasiHP, tampilHP: tampilHP, emailValid: emailValid,
     parseTanggal: parseTanggal, hitungUsia: hitungUsia, alurPembuka: alurPembuka, alurKelayakan: alurKelayakan,
     perluNPSN: perluNPSN, pendaftarSekolah: pendaftarSekolah, kontakGuru: kontakGuru,
     pendaftarOrangTua: pendaftarOrangTua, kontakWali: kontakWali,
