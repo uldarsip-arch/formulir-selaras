@@ -19,6 +19,8 @@ function buatLogika(CFG) {
     yaTidak: ['Ya', 'Tidak'],
     sudahBelum: ['Sudah', 'Belum'],
     peran: ['Kepala Sekolah', 'Guru', 'Orang Tua', 'Anggota Keluarga Lainnya'],
+    // Khusus panel admin: koreksi peran bila yang mengisi formulir ternyata murid sendiri
+    peranAdmin: ['Kepala Sekolah', 'Guru', 'Orang Tua', 'Anggota Keluarga Lainnya', 'Murid (didaftarkan guru)', 'Murid (didaftarkan orang tua)'],
     jenisKelamin: ['Laki-Laki', 'Perempuan'],
     layanan: [
       'Tes IQ',
@@ -65,13 +67,25 @@ function buatLogika(CFG) {
   function npsnValid(v) { return /^(?=.*\d)[A-Z0-9]{8}$/.test(normalisasiNPSN(v)); }
   var PESAN_NPSN = 'NPSN terdiri dari 8 karakter: angka (contoh 20100123) atau huruf dan angka (contoh P9984565).';
 
+  /** NISN: 10 digit, atau "0" untuk murid baru yang belum memiliki NISN. */
+  function normalisasiNISN(v) {
+    var s = String(v === undefined || v === null ? '' : v).replace(/\D/g, '');
+    return /^0+$/.test(s) && s.length < 10 ? '0' : s;
+  }
+  function keteranganNISN(v) { return normalisasiNISN(v) === '0' ? 'Murid baru' : ''; }
+  function nisnValid(v) { var s = normalisasiNISN(v); return s === '0' || /^\d{10}$/.test(s); }
+
   /** Nomor HP Indonesia → format baku 628xxxxxxxxx. Kembalikan '' bila tidak valid. */
   function normalisasiHP(v) {
     if (!isi(v)) return '';
-    var s = String(v).replace(/[\s\-().]/g, '');
-    if (s.indexOf('+') === 0) s = s.slice(1);
-    if (s.indexOf('62') === 0) s = '0' + s.slice(2);
-    if (!/^08[1-9][0-9]{7,10}$/.test(s)) return '';
+    // Ubah angka "lebar" (０-９) jadi angka biasa, lalu buang SEMUA selain angka: spasi, strip, titik,
+    // tanda kurung, en-dash (–), dan karakter tak terlihat yang ikut tersalin dari kontak WhatsApp.
+    var s = String(v).replace(/[\uFF10-\uFF19]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 48); })
+      .replace(/\D/g, '');
+    if (s.indexOf('620') === 0) return '';              // +62 0813… DITOLAK: setelah 62 tidak boleh ada 0
+    if (s.indexOf('62') === 0) s = '0' + s.slice(2);   // +62 / 62
+    if (s.charAt(0) === '8') s = '0' + s;               // 813… tanpa 0
+    if (!/^08[1-9][0-9]{7,11}$/.test(s)) return '';
     return '62' + s.slice(1);
   }
   /** 628123456789 → +62 812-3456-789 (untuk tampilan) */
@@ -247,7 +261,9 @@ function buatLogika(CFG) {
     function pilih(k, daftar) { if (!dalam(d[k], daftar)) e[k] = 'Silakan pilih salah satu jawaban.'; }
     function hp(k, w) {
       if (!isi(d[k])) { if (w) e[k] = 'Nomor HP wajib diisi.'; return; }
-      if (!normalisasiHP(d[k])) e[k] = 'Nomor HP tidak valid. Gunakan nomor seluler Indonesia, contoh: 0812-3456-7890.';
+      if (/^\D*62\D*0/.test(String(d[k]).replace(/[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g, '')))
+        e[k] = 'Setelah +62 jangan diawali angka 0. Tulis +62 813-… atau 0813-….';
+      else if (!normalisasiHP(d[k])) e[k] = 'Nomor HP tidak valid. Gunakan nomor seluler Indonesia, contoh: 0812-3456-7890.';
     }
     function teks(k, w, min, maks) {
       var v = rapikan(d[k]);
@@ -301,6 +317,10 @@ function buatLogika(CFG) {
         }
       }
       if (CFG.TAMPILKAN_NAMA_ANAK !== false) teks('namaAnak', true, 2, 100);
+      // NISN opsional (anak PAUD/belum terdata bisa belum punya); bila diisi harus 10 digit
+      var nisn = normalisasiNISN(d.nisn);
+      if (!nisn) e.nisn = 'NISN wajib diisi. Isi 0 jika belum memiliki NISN (murid baru).';
+      else if (nisn !== '0' && !/^\d{10}$/.test(nisn)) e.nisn = 'NISN terdiri dari 10 digit angka (contoh 0123456789), atau isi 0 jika murid baru.';
       pilih('jenisKelamin', OPSI.jenisKelamin);
       teks('tempatLahir', true, 2, 60);
       if (!isi(d.tanggalLahir)) e.tanggalLahir = 'Tanggal lahir wajib diisi.';
@@ -323,7 +343,9 @@ function buatLogika(CFG) {
         if (!ok) e.jenisDokumen = 'Pilih jenis dokumen yang diunggah.';
       }
       var b = d.berkas;
-      if (!b || !b.nama) e.berkas = 'Silakan unggah berkas PDF.';
+      if (ctx.izinTautan && d.modeBerkas === 'tautan') {   // khusus input admin: berkas berupa tautan
+        if (!/^https?:\/\/\S+\.\S+/.test(String(d.tautanBerkas || '').trim())) e.tautanBerkas = 'Masukkan tautan berkas yang valid (diawali https://).';
+      } else if (!b || !b.nama) e.berkas = 'Silakan unggah berkas PDF.';
       else if (!/\.pdf$/i.test(b.nama) || (b.tipe && b.tipe !== 'application/pdf')) e.berkas = 'Berkas harus berformat PDF.';
       else if (b.ukuran > MAKS_MB * 1024 * 1024) e.berkas = 'Ukuran berkas melebihi ' + MAKS_MB + ' MB.';
       else if (b.ukuran < 1024) e.berkas = 'Berkas tampak kosong atau rusak. Silakan unggah ulang.';
@@ -369,6 +391,8 @@ function buatLogika(CFG) {
     o.hubunganWali = rapikan(w.hubungan);
     o.hpWali = normalisasiHP(w.hp);
     o.npsn = normalisasiNPSN(d.npsn);
+    o.nisn = normalisasiNISN(d.nisn);
+    o.ketNisn = keteranganNISN(o.nisn);
     if (d.sekolahManual === true) { o.namaSekolah = rapikan(d.namaSekolahManual); o.statusSekolah = 'PERLU VERIFIKASI (NPSN tidak ditemukan)'; }
     else { o.namaSekolah = rapikan(d.namaSekolah); o.statusSekolah = 'Terverifikasi NPSN'; }
     var u = hitungUsia(d.tanggalLahir, ctx.tanggalAcuan);
@@ -383,7 +407,8 @@ function buatLogika(CFG) {
 
   return {
     OPSI: OPSI, LANGKAH: LANGKAH, PETUNJUK_BERKAS: PETUNJUK_BERKAS,
-    isi: isi, rapikan: rapikan, normalisasiNPSN: normalisasiNPSN, npsnValid: npsnValid, normalisasiHP: normalisasiHP, tampilHP: tampilHP, emailValid: emailValid,
+    isi: isi, rapikan: rapikan, normalisasiNPSN: normalisasiNPSN, npsnValid: npsnValid,
+    normalisasiNISN: normalisasiNISN, keteranganNISN: keteranganNISN, nisnValid: nisnValid, normalisasiHP: normalisasiHP, tampilHP: tampilHP, emailValid: emailValid,
     parseTanggal: parseTanggal, hitungUsia: hitungUsia, alurPembuka: alurPembuka, alurKelayakan: alurKelayakan,
     perluNPSN: perluNPSN, pendaftarSekolah: pendaftarSekolah, kontakGuru: kontakGuru,
     pendaftarOrangTua: pendaftarOrangTua, kontakWali: kontakWali,

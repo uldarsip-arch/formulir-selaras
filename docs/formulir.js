@@ -1,13 +1,20 @@
 /* ============================================================
- *  FORMULIR PUBLIK — tampilan, alur langkah, dan unggah berkas.
+ *  FORMULIR PENDAFTARAN — tampilan, alur langkah, dan unggah berkas.
  *  Aturan percabangan & validasi berasal dari window.Logika
  *  (sumber yang sama dengan validasi di server: Logika.gs).
+ *
+ *  buatFormulir(wadah, OPSI) dipakai di dua tempat:
+ *   - Halaman publik (Index.html)           → OPSI = {}
+ *   - Panel admin, menu "Input Pendaftaran" → OPSI = { admin: true, token: fn, selesai: fn, keDaftar: fn }
+ *     (tambahan langkah tanggal pendaftaran & pilihan berkas berupa tautan)
  * ============================================================ */
-(function () {
+window.buatFormulir = function (app, OPSI) {
   'use strict';
+  OPSI = OPSI || {};
+  var ADMIN = !!OPSI.admin;
   var C = window.CONFIG_PUBLIK, L = window.Logika, A = window.ASET || {};
-  var app = document.getElementById('app');
-  var CTX = { tanggalAcuan: C.TANGGAL_HARI_INI };
+  var LANGKAH = ADMIN ? [{ id: 'adminInput', judul: 'Tanggal Pendaftaran' }].concat(L.LANGKAH) : L.LANGKAH;
+  var CTX = { tanggalAcuan: C.TANGGAL_HARI_INI, izinTautan: ADMIN };
 
   /** ID unik per pengisian — server memakainya agar klik ganda / kirim ulang tidak tersimpan dua kali. */
   function idBaru() {
@@ -17,7 +24,7 @@
   }
   var D = { mulaiPada: Date.now(), website: '', idKirim: idBaru() };   // seluruh jawaban (tetap tersimpan saat Kembali/Lanjutkan)
   var FILE = null;                                 // {nama, tipe, ukuran, base64, untuk}
-  var langkah = -1;                                // -1 = halaman pengumuman
+  var langkah = ADMIN ? 0 : -1;                    // -1 = halaman pengumuman (khusus publik)
   var galat = {};
   var sekolah = { status: '', npsn: '' };          // status: '', 'mencari', 'ditemukan', 'tidak', 'galat'
   var hasilKirim = null;
@@ -137,7 +144,8 @@
   }
   function ulangDariAwal() {
     D = { mulaiPada: Date.now(), website: '', idKirim: idBaru() }; FILE = null; galat = {}; sekolah = { status: '', npsn: '' }; hasilKirim = null;
-    tutupModal(); langkah = -1; render();
+    CTX.tanggalAcuan = C.TANGGAL_HARI_INI;
+    tutupModal(); langkah = ADMIN ? 0 : -1; render();
   }
 
   function modalScreening() {
@@ -166,7 +174,7 @@
 
   // ---------------- Halaman ----------------
   function kepalaLangkah() {
-    var l = L.LANGKAH, h = '<div class="progres" aria-label="Kemajuan pengisian"><div class="progres-teks"><span>Langkah <b>' + (langkah + 1) +
+    var l = LANGKAH, h = '<div class="progres" aria-label="Kemajuan pengisian"><div class="progres-teks"><span>Langkah <b>' + (langkah + 1) +
       '</b> dari ' + l.length + '</span><span>' + esc(l[langkah].judul) + '</span></div><div class="progres-batang">';
     for (var i = 0; i < l.length; i++) h += '<span class="' + (i < langkah ? 'selesai' : i === langkah ? 'aktif' : '') + '"></span>';
     return h + '</div></div>';
@@ -222,7 +230,7 @@
 
   function hPendaftar() {
     var h = '<div class="bagian-label">Bagian C</div><h2>Data Pendaftar</h2>';
-    h += fTeks('namaPendaftar', 'NAMA PENDAFTAR', { petunjuk: '<strong>Tuliskan nama lengkap Anda (BUKAN NAMA ANAK ANDA YAA).</strong>', ac: 'name', maks: 100 });
+    h += fTeks('namaPendaftar', 'NAMA PENDAFTAR', { petunjuk: '<span style="display:block;background:#fef2f2;border:1px solid #fca5a5;border-left:4px solid #b91c1c;border-radius:8px;padding:8px 12px;color:#b91c1c;font-weight:800">⚠️ ISIKAN NAMA ANDA BUKAN NAMA ANAK/MURID ANDA</span>', ac: 'name', maks: 100 });
     h += fRadio('peran', 'Peran', L.OPSI.peran, { petunjuk: 'Pilih peran Anda terhadap anak/murid yang didaftarkan.' });
     h += '<div class="grid-2">' + fTeks('hp', 'Nomor HP', { tipe: 'tel', ac: 'tel', im: 'tel', ph: '0812-3456-7890', petunjuk: 'Nomor aktif WhatsApp.' }) +
       fTeks('email', 'Email Aktif', { tipe: 'email', ac: 'email', im: 'email', ph: 'nama@gmail.com', petunjuk: 'Untuk informasi jadwal.' }) + '</div>';
@@ -335,6 +343,9 @@
     var h = '<div class="bagian-label">Bagian E</div><h2>Identitas Anak/Murid</h2><p class="petunjuk">Seluruh kolom wajib diisi.</p>';
     h += hNpsn();
     if (C.TAMPILKAN_NAMA_ANAK !== false) h += fTeks('namaAnak', 'Nama Lengkap Anak/Murid', { maks: 100 });
+    h += fTeks('nisn', 'NISN (Nomor Induk Siswa Nasional)', { im: 'numeric', maks: 10, ph: 'Contoh: 0123456789',
+      petunjuk: '10 digit angka. Isi <strong>0</strong> jika anak belum memiliki NISN (murid baru).' }).replace(/<\/div>$/,
+      '<p class="info ok" id="ket-nisn" style="margin:8px 0 0"' + (L.keteranganNISN(D.nisn) ? '' : ' hidden') + '><span class="ikon" aria-hidden="true">ℹ️</span><span>Keterangan: <strong>Murid baru</strong></span></p></div>');
     h += fRadio('jenisKelamin', 'Jenis Kelamin', L.OPSI.jenisKelamin);
     h += fTeks('tempatLahir', 'Tempat Lahir', { maks: 60, ph: 'Contoh: Jakarta' });
     h += fTanggalLahir();
@@ -353,6 +364,15 @@
     var info = L.infoBerkas(D);
     var h = '<div class="bagian-label">Bagian F</div><h2>Tambah Berkas</h2>';
     if (FILE && FILE.untuk !== D.pernahTes) { FILE = null; D.berkas = null; h += '<div class="info peringatan"><span class="ikon">⚠️</span><div>Jawaban tentang tes sebelumnya berubah. Silakan unggah ulang berkas yang sesuai.</div></div>'; }
+    if (ADMIN) {
+      h += fRadio('modeBerkas', 'Cara melampirkan berkas', ['unggah', 'tautan'], { petunjuk: 'Khusus input admin: berkas boleh berupa tautan (mis. Google Drive).' })
+        .replace('>unggah<', '>Unggah file PDF<').replace('>tautan<', '>Tautan berkas (link)<');
+      if (D.modeBerkas === 'tautan') {
+        if (info.perluJenis) h += fPilih('jenisDokumen', 'Jenis dokumen', L.OPSI.jenisDokumen.map(function (j) { return j[0]; }));
+        return h + fTeks('tautanBerkas', 'Tautan berkas', { tipe: 'url', ph: 'https://drive.google.com/…',
+          petunjuk: 'Pastikan tautan dapat dibuka oleh petugas ULD (izin berbagi sudah diatur).' });
+      }
+    }
     if (info.perluJenis) h += fPilih('jenisDokumen', 'Jenis dokumen yang diunggah', L.OPSI.jenisDokumen.map(function (j) { return j[0]; }),
       { petunjuk: 'Pilih yang paling sesuai. Bila dokumen gabungan, pilih dokumen utama.' });
     h += '<div class="' + kelasBidang('berkas') + '" id="b-berkas"><label for="berkas">' + esc(info.label) + tandaWajib() + '</label>' +
@@ -371,20 +391,24 @@
   function hTinjau() {
     var a = L.dataAktif(D, CTX);
     function baris(lbl, v) { return v ? '<dt>' + esc(lbl) + '</dt><dd>' + esc(v) + '</dd>' : ''; }
+    var OFS = ADMIN ? 1 : 0;
     function blok(judul, idx, isi) {
-      return '<section class="ringkas"><div class="ringkas-kepala"><h3>' + judul + '</h3><button type="button" class="tombol-teks" data-aksi="ke" data-langkah="' + idx + '">Ubah</button></div><dl>' + isi + '</dl></section>';
+      return '<section class="ringkas"><div class="ringkas-kepala"><h3>' + judul + '</h3><button type="button" class="tombol-teks" data-aksi="ke" data-langkah="' + (idx + OFS) + '">Ubah</button></div><dl>' + isi + '</dl></section>';
     }
     var h = '<div class="bagian-label">Langkah terakhir</div><h2>Periksa Kembali Data Anda</h2><p class="petunjuk">Pastikan seluruh data sudah benar sebelum dikirim.</p>';
+    if (ADMIN) h += blok('Tanggal Pendaftaran', -1, baris('Tanggal & jam pendaftaran', formatTanggal(String(D.waktuDaftarAdmin).slice(0, 10)) + ' pukul ' + String(D.waktuDaftarAdmin).slice(11) + ' WIB'));
     h += blok('Pertanyaan Pembuka', 0, baris('Pernah konsultasi di ULD', a.pernahKonsultasi) + baris('Punya hasil screening/diagnosa', a.punyaScreening));
     h += blok('Kelayakan Pendaftaran', 1, baris(LABEL_B.sudahSekolah, a.sudahSekolah) + baris(LABEL_B.sekolahJakarta, a.sekolahJakarta) + baris(LABEL_B.ktpJakarta, a.ktpJakarta) + baris('Catatan', a.prioritas));
     h += blok('Data Pendaftar', 2, baris('Nama pendaftar', a.namaPendaftar) + baris('Peran', a.peran) + baris('Nomor HP', L.tampilHP(a.hp)) + baris('Email', a.email));
     h += blok('Kontak Lainnya', 3, baris('Nama guru', a.namaGuru) + baris('Nomor HP guru', L.tampilHP(a.hpGuru)) + baris('Nama orang tua/wali', a.namaWali) + baris('Hubungan dengan anak', a.hubunganWali) + baris('Nomor HP orang tua/wali', L.tampilHP(a.hpWali)));
     h += blok('Identitas Anak/Murid', 4, baris('NPSN', a.npsn) + baris('Nama sekolah', a.namaSekolah ? a.namaSekolah + (D.sekolahManual === true ? ' (perlu verifikasi)' : '') : a.statusSekolah) +
-      baris('Nama anak/murid', a.namaAnak) + baris('Jenis kelamin', a.jenisKelamin) + baris('Tempat, tanggal lahir', a.tempatLahir + ', ' + formatTanggal(a.tanggalLahir)) + baris('Usia', a.usia) +
+      baris('Nama anak/murid', a.namaAnak) + baris('NISN', a.nisn + (a.ketNisn ? ' (' + a.ketNisn + ')' : '')) + baris('Jenis kelamin', a.jenisKelamin) + baris('Tempat, tanggal lahir', a.tempatLahir + ', ' + formatTanggal(a.tanggalLahir)) + baris('Usia', a.usia) +
       baris('Nama ayah', a.namaAyah) + baris('Nama ibu', a.namaIbu) + baris('Layanan', a.layanan) + baris('Kondisi anak/murid', a.kondisi) + baris('Pernah tes IQ/BERA/asesmen', a.pernahTes));
-    h += blok('Berkas', 5, baris('Jenis dokumen', a.jenisDokumen) + baris('File', FILE ? FILE.nama + ' (' + ukuranTeks(FILE.ukuran) + ')' : '-'));
+    h += blok('Berkas', 5, baris('Jenis dokumen', a.jenisDokumen) + (ADMIN && D.modeBerkas === 'tautan' ? baris('Tautan berkas', D.tautanBerkas) :
+      baris('File', FILE ? FILE.nama + ' (' + ukuranTeks(FILE.ukuran) + ')' : '-')));
     h += '<fieldset class="' + kelasBidang('persetujuan') + '" id="b-persetujuan"><legend class="sr">Pernyataan</legend><label class="pilihan"><input type="checkbox" name="persetujuan" id="persetujuan"' +
-      (D.persetujuan === true ? ' checked' : '') + aria('persetujuan') + '><span>Saya menyatakan data yang saya isi adalah benar, dan saya bersedia dihubungi oleh petugas ULD Dinas Pendidikan Provinsi DKI Jakarta untuk keperluan layanan konsultasi.</span></label>' +
+      (D.persetujuan === true ? ' checked' : '') + aria('persetujuan') + '><span>' + (ADMIN ? 'Data ini saya input berdasarkan formulir/arsip pendaftar dan sudah saya periksa kebenarannya.' :
+      'Saya menyatakan data yang saya isi adalah benar, dan saya bersedia dihubungi oleh petugas ULD Dinas Pendidikan Provinsi DKI Jakarta untuk keperluan layanan konsultasi.') + '</span></label>' +
       pesanGalat('persetujuan') + '</fieldset>';
     if (galat._kirim) h += '<div class="info bahaya" role="alert"><span class="ikon">⚠️</span><div>' + esc(galat._kirim) + '</div></div>';
     return h;
@@ -392,6 +416,11 @@
 
   function hSukses() {
     var r = hasilKirim;
+    if (ADMIN) return '<div class="kartu sukses"><div class="centang" aria-hidden="true">✓</div><h2>Data Pendaftaran Tersimpan</h2>' +
+      '<p>Nomor registrasi:</p><div class="noreg" id="noreg">' + esc(r.noReg) + '</div>' +
+      '<p class="petunjuk">Tanggal pendaftaran: ' + esc(formatTanggal(String(D.waktuDaftarAdmin).slice(0, 10))) + ' pukul ' + esc(String(D.waktuDaftarAdmin).slice(11)) + ' WIB.</p>' +
+      '<div class="baris-tombol" style="justify-content:center"><button type="button" class="tombol tombol-utama" data-aksi="awal">Input Data Lain</button>' +
+      '<button type="button" class="tombol tombol-garis" data-aksi="ke-daftar">Lihat di Daftar Pendaftaran</button></div></div>';
     return '<div class="kartu sukses"><div class="centang" aria-hidden="true">✓</div><h1>Pendaftaran Berhasil Dikirim</h1>' +
       '<p>Terima kasih, <strong>' + esc(D.namaPendaftar) + '</strong>. Data Anda sudah kami terima.</p><p style="margin:0">Nomor registrasi Anda:</p>' +
       '<div class="noreg" id="noreg">' + esc(r.noReg) + '</div>' +
@@ -401,16 +430,50 @@
       '<button type="button" class="tombol tombol-utama" data-aksi="awal">Kembali ke Beranda</button></div></div>';
   }
 
-  var RENDER = { pembuka: hPembuka, kelayakan: hKelayakan, pendaftar: hPendaftar, kontak: hKontak, anak: hAnak, berkas: hBerkas, tinjau: hTinjau };
+  /** Langkah khusus admin: tanggal & jam pendaftaran (urutan Tanggal–Bulan–Tahun). */
+  function hAdminInput() {
+    var p = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(D.waktuDaftarAdmin || '') || [];
+    function sel(id, label, opsi, nilai) {
+      return '<div><label class="tgl-label" for="' + id + '">' + label + '</label><select id="' + id + '" name="' + id + '"><option value="">' + label + '</option>' +
+        opsi.map(function (o) { return '<option value="' + o[0] + '"' + (nilai === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>';
+    }
+    function rentang(a, b) { var o = []; for (var i = a; i <= b; i++) { var v = ('0' + i).slice(-2); o.push([v, v]); } return o; }
+    var th = +String(C.TANGGAL_HARI_INI).slice(0, 4), tahun = []; for (var y = th; y >= th - 10; y--) tahun.push([String(y), String(y)]);
+    var bulan = NAMA_BULAN.map(function (n, i) { return [('0' + (i + 1)).slice(-2), n]; });
+    var hari = rentang(1, 31).map(function (x) { return [x[0], String(+x[0])]; });
+    return '<div class="bagian-label">Input oleh admin</div><h2>Tanggal Pendaftaran</h2>' +
+      '<div class="info"><span class="ikon" aria-hidden="true">🗂️</span><div>Untuk menginput data pendaftaran yang masuk <strong>sebelum aplikasi ini dipakai</strong>. ' +
+      'Tanggal ini dipakai untuk urutan daftar, rekap, kuota sekolah tahun tersebut, perhitungan usia anak, dan nomor registrasi.</div></div>' +
+      '<fieldset class="' + kelasBidang('waktuDaftarAdmin') + '" id="b-waktuDaftarAdmin"><legend>Tanggal pendaftaran' + tandaWajib() + '</legend>' +
+      '<div class="tgl-tiga">' + sel('adm_hari', 'Tanggal', hari, p[3]) + sel('adm_bulan', 'Bulan', bulan, p[2]) + sel('adm_tahun', 'Tahun', tahun, p[1]) + '</div>' +
+      '<div class="tgl-tiga" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px">' + sel('adm_jam', 'Jam', rentang(0, 23), p[4] || '08') +
+      sel('adm_menit', 'Menit', rentang(0, 59), p[5] || '00') + '<div></div></div>' + pesanGalat('waktuDaftarAdmin') + '</fieldset>';
+  }
+  function susunWaktuAdmin() {
+    function v(id) { var e = document.getElementById(id); return e ? e.value : ''; }
+    var h = v('adm_hari'), b = v('adm_bulan'), t = v('adm_tahun');
+    D.waktuDaftarAdmin = h && b && t ? t + '-' + b + '-' + h + ' ' + (v('adm_jam') || '08') + ':' + (v('adm_menit') || '00') : '';
+    if (D.waktuDaftarAdmin && L.parseTanggal(D.waktuDaftarAdmin.slice(0, 10))) CTX.tanggalAcuan = D.waktuDaftarAdmin.slice(0, 10);
+  }
+  function validasiAdminInput() {
+    var w = D.waktuDaftarAdmin || '';
+    if (!w) return { waktuDaftarAdmin: 'Pilih tanggal, bulan, dan tahun pendaftaran.' };
+    if (!L.parseTanggal(w.slice(0, 10))) return { waktuDaftarAdmin: 'Tanggal tidak valid.' };
+    if (w.slice(0, 10) > C.TANGGAL_HARI_INI) return { waktuDaftarAdmin: 'Tanggal pendaftaran tidak boleh di masa depan.' };
+    return {};
+  }
+
+  var RENDER = { adminInput: hAdminInput, pembuka: hPembuka, kelayakan: hKelayakan, pendaftar: hPendaftar, kontak: hKontak, anak: hAnak, berkas: hBerkas, tinjau: hTinjau };
 
   function render(fokusId) {
     if (hasilKirim) { app.innerHTML = hSukses(); return; }
-    if (langkah < 0) { app.innerHTML = hBeranda(); return; }
-    var id = L.LANGKAH[langkah].id;
+    if (langkah < 0 && !ADMIN) { app.innerHTML = hBeranda(); return; }
+    var id = LANGKAH[langkah].id;
     var akhir = id === 'tinjau';
     app.innerHTML = kepalaLangkah() + '<form class="kartu" novalidate onsubmit="return false">' +
       '<div class="sr" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>' +
-      RENDER[id]() + navigasi(akhir ? 'Kirim Pendaftaran' : '') + '</form>';
+      RENDER[id]() + navigasi(akhir ? (ADMIN ? 'Simpan Data Pendaftaran' : 'Kirim Pendaftaran') : '') + '</form>';
+    if (ADMIN && langkah === 0) { var kb = app.querySelector('[data-aksi=kembali]'); if (kb) kb.style.visibility = 'hidden'; }
     if (fokusId) { var f = document.getElementById(fokusId); if (f) f.focus(); }
   }
 
@@ -422,8 +485,8 @@
   }
 
   function lanjut() {
-    var id = L.LANGKAH[langkah].id;
-    galat = L.validasiLangkah(id, D, CTX);
+    var id = LANGKAH[langkah].id;
+    galat = id === 'adminInput' ? validasiAdminInput() : L.validasiLangkah(id, D, CTX);
     if (galat._tolak === 'tolak_screening') return modalScreening();
     if (galat._tolak === 'tolak_sekolah') return modalSekolah();
     if (Object.keys(galat).length) {
@@ -481,16 +544,17 @@
 
   // ---------------- Kirim ----------------
   var BIDANG_LANGKAH = {
+    adminInput: ['waktuDaftarAdmin'],
     pembuka: ['pernahKonsultasi', 'punyaScreening'],
     kelayakan: ['sudahSekolah', 'sekolahJakarta', 'ktpJakarta'],
     pendaftar: ['namaPendaftar', 'peran', 'hp', 'email'],
     kontak: ['namaGuru', 'hpGuru', 'namaWali', 'hubunganWali', 'hpWali'],
-    anak: ['npsn', 'namaSekolahManual', 'namaAnak', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'namaAyah', 'namaIbu', 'layanan', 'kondisi', 'pernahTes'],
-    berkas: ['jenisDokumen', 'berkas']
+    anak: ['npsn', 'namaSekolahManual', 'namaAnak', 'nisn', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'namaAyah', 'namaIbu', 'layanan', 'kondisi', 'pernahTes'],
+    berkas: ['jenisDokumen', 'berkas', 'tautanBerkas', 'modeBerkas']
   };
   function langkahUntuk(k) {
-    for (var i = 0; i < L.LANGKAH.length; i++) { var b = BIDANG_LANGKAH[L.LANGKAH[i].id]; if (b && b.indexOf(k) !== -1) return i; }
-    return L.LANGKAH.length - 1;
+    for (var i = 0; i < LANGKAH.length; i++) { var b = BIDANG_LANGKAH[LANGKAH[i].id]; if (b && b.indexOf(k) !== -1) return i; }
+    return LANGKAH.length - 1;
   }
   function kirim() {
     var muat = document.createElement('div');
@@ -498,9 +562,15 @@
     muat.innerHTML = '<div class="putar" aria-hidden="true"></div><div>Mengirim pendaftaran…<br><small style="font-weight:500">Mohon tidak menutup halaman ini.</small></div>';
     document.body.appendChild(muat);
     var data = {}; Object.keys(D).forEach(function (k) { data[k] = D[k]; });
-    api('kirimPendaftaran', data, { nama: FILE.nama, tipe: FILE.tipe, ukuran: FILE.ukuran, base64: FILE.base64 }).then(function (r) {
+    var b = FILE ? { nama: FILE.nama, tipe: FILE.tipe, ukuran: FILE.ukuran, base64: FILE.base64 } : null;
+    var janji = ADMIN
+      ? api('adminInputPendaftaran', OPSI.token(), data, D.modeBerkas === 'tautan' ? null : b, { waktuDaftar: D.waktuDaftarAdmin, tautan: D.modeBerkas === 'tautan' ? D.tautanBerkas : '' })
+        .then(function (r) { return r.ok ? { ok: true, noReg: r.data.noReg } : r; })
+      : api('kirimPendaftaran', data, b);
+    janji.then(function (r) {
       muat.remove();
-      if (r.ok) { hasilKirim = r; FILE = null; render(); window.scrollTo(0, 0); return; }
+      if (r.sesiHabis && OPSI.sesiHabis) return OPSI.sesiHabis();
+      if (r.ok) { hasilKirim = r; FILE = null; render(); window.scrollTo(0, 0); if (OPSI.selesai) OPSI.selesai(r); return; }
       if (r.bidang) {
         var langkahGalat = Math.min.apply(null, Object.keys(r.bidang).map(langkahUntuk));
         if (r.bidang.npsn) { sekolah = { status: 'tidak', npsn: D.npsn }; D.namaSekolah = ''; }
@@ -519,11 +589,12 @@
     var a = b.getAttribute('data-aksi');
     if (a === 'mulai') { D.mulaiPada = Date.now(); if (!D.idKirim) D.idKirim = idBaru(); keLangkah(0); }
     else if (a === 'lanjut') lanjut();
-    else if (a === 'kembali') { if (langkah === 0) { langkah = -1; render(); } else keLangkah(langkah - 1); }
+    else if (a === 'kembali') { if (langkah === 0) { if (!ADMIN) { langkah = -1; render(); } } else keLangkah(langkah - 1); }
     else if (a === 'ke') keLangkah(+b.getAttribute('data-langkah'));
     else if (a === 'cari-npsn') { sekolah.npsn = ''; cariNpsn(); }
     else if (a === 'hapus-berkas') { FILE = null; D.berkas = null; render('berkas'); }
     else if (a === 'awal') ulangDariAwal();
+    else if (a === 'ke-daftar' && OPSI.keDaftar) OPSI.keDaftar();
     else if (a === 'salin') {
       var t = hasilKirim.noReg;
       (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { b.textContent = 'Tersalin ✓'; })
@@ -536,7 +607,7 @@
     if (t.type === 'radio') {
       D[k] = t.value; delete galat[k];
       if (k === 'punyaScreening' && t.value === 'Tidak') { render(t.id); return modalScreening(); }
-      if (L.LANGKAH[langkah].id === 'kelayakan') {
+      if (LANGKAH[langkah].id === 'kelayakan') {
         var s = L.alurKelayakan(D);
         render(t.id);
         if (s.status === 'tolak_sekolah') modalSekolah();
@@ -548,6 +619,9 @@
       if (k === 'sekolahManual') { delete galat.npsn; render('npsn'); var m = document.getElementById('namaSekolahManual'); if (t.checked && m) m.focus(); }
     } else if (t.type === 'file') {
       if (t.files && t.files[0]) pilihBerkas(t.files[0]);
+    } else if (/^adm_/.test(k)) {
+      susunWaktuAdmin();
+      if (galat.waktuDaftarAdmin && D.waktuDaftarAdmin) { delete galat.waktuDaftarAdmin; render(t.id); }
     } else if (k === 'tl_hari' || k === 'tl_bulan' || k === 'tl_tahun') {
       D[k] = t.value; susunTanggalLahir();
       var u = document.getElementById('usia'); if (u) u.innerHTML = teksUsia();
@@ -557,6 +631,10 @@
 
   app.addEventListener('input', function (ev) {
     var t = ev.target, k = t.name; if (!k || t.type === 'radio' || t.type === 'checkbox' || t.type === 'file') return;
+    if (k === 'nisn') {
+      t.value = t.value.replace(/\D/g, '').slice(0, 10);
+      var kn = document.getElementById('ket-nisn'); if (kn) kn.hidden = !(t.value && L.keteranganNISN(t.value));
+    }
     if (k === 'npsn') {
       t.value = L.normalisasiNPSN(t.value).slice(0, 8);
       if (t.value !== D.npsn) { D.namaSekolah = ''; if (sekolah.status !== 'tidak' || t.value.length === 8) { sekolah = { status: '', npsn: '' }; } }
@@ -580,9 +658,11 @@
   app.addEventListener('dragenter', function (ev) { var z = ev.target.closest && ev.target.closest('.unggah'); if (z) z.classList.add('seret'); });
   app.addEventListener('dragleave', function (ev) { var z = ev.target.closest && ev.target.closest('.unggah'); if (z) z.classList.remove('seret'); });
 
-  window.addEventListener('beforeunload', function (ev) {
+  if (!ADMIN) window.addEventListener('beforeunload', function (ev) {
     if (langkah >= 0 && !hasilKirim) { ev.preventDefault(); ev.returnValue = ''; }
   });
 
   render();
-})();
+};
+// Halaman publik: jalankan formulir di #app. (Di panel admin, formulir dibuat lewat menu Input Pendaftaran.)
+if (document.getElementById('app')) window.buatFormulir(document.getElementById('app'), {});
