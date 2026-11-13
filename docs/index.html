@@ -217,12 +217,14 @@
         '<p class="petunjuk">Detail teknis untuk admin:<br><code>' + g.replace(/</g, '&lt;') + '</code></p></div>';
     }, 25000);
   </script>
-  <script src="config.js?v=mwblp8fn"></script>
-  <script src="logika.js?v=e471528a"></script>
+  <script src="config.js?v=mwd9acox"></script>
+  <script src="logika.js?v=d5f97f63"></script>
   <script src="aset-kop.js?v=ec3a5d82"></script>
   <script>
     /* Versi GitHub Pages: konfigurasi publik diambil dari Apps Script (pengaturan Panel Admin tetap berlaku). */
     (function () {
+      // Link khusus ULD Kota: …/?uld=jakbar1
+      try { window.PARAM_ULD = (new URLSearchParams(location.search).get('uld') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 30); } catch (e) { window.PARAM_ULD = ''; }
       var kop = document.getElementById('kop-img');
       kop.src = ASET.kop;
       function esc(s) { return String(s == null ? '' : s).replace(/</g, '&lt;'); }
@@ -243,7 +245,7 @@
             '<strong>' + esc(C.NAMA_UNIT) + '</strong><br>' + esc(C.ALAMAT_KANTOR) +
             '<br>Instagram: ' + esc(C.instagramHandle) + ' · WhatsApp Admin: ' + esc(C.whatsapp);
           var s = document.createElement('script');
-          s.src = 'formulir.js?v=a23bc946';
+          s.src = 'formulir.js?v=bc5a20e2';
           document.body.appendChild(s);
         })
         .catch(function (e) { window.__galatMuat.push(String(e && e.message || e)); gagal(); });

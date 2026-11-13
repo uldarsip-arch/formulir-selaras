@@ -27,6 +27,10 @@ window.buatFormulir = function (app, OPSI) {
   var langkah = ADMIN ? 0 : -1;                    // -1 = halaman pengumuman (khusus publik)
   var galat = {};
   var sekolah = { status: '', npsn: '' };          // status: '', 'mencari', 'ditemukan', 'tidak', 'galat'
+  // Link khusus ULD Kota (…?uld=jakbar1): peran & asal ULD Kota terisi otomatis
+  var ULD_LINK = ADMIN ? '' : L.uldDariKode(OPSI.uld !== undefined ? OPSI.uld : window.PARAM_ULD);
+  function terapkanLinkUld() { if (ULD_LINK) { D.peran = 'ULD Kota'; D.asalUld = ULD_LINK; } }
+  terapkanLinkUld();
   var hasilKirim = null;
   var timerNpsn = null;
 
@@ -144,6 +148,7 @@ window.buatFormulir = function (app, OPSI) {
   }
   function ulangDariAwal() {
     D = { mulaiPada: Date.now(), website: '', idKirim: idBaru() }; FILE = null; galat = {}; sekolah = { status: '', npsn: '' }; hasilKirim = null;
+    terapkanLinkUld();
     CTX.tanggalAcuan = C.TANGGAL_HARI_INI;
     tutupModal(); langkah = ADMIN ? 0 : -1; render();
   }
@@ -193,6 +198,8 @@ window.buatFormulir = function (app, OPSI) {
         '<div class="baris-tombol"><a class="tombol tombol-wa" href="' + urlWA() + '" target="_blank" rel="noopener noreferrer">Hubungi Kami</a></div></div>';
       return h;
     }
+    if (ULD_LINK) h += '<div class="info ok" role="status"><span class="ikon" aria-hidden="true">🏢</span><div>Formulir khusus petugas <strong>ULD Kota ' + esc(ULD_LINK) +
+      '</strong>. Peran dan asal ULD Kota sudah terisi otomatis.</div></div>';
     h += '<p>' + esc(p.isi).replace(/\n/g, '<br>') + '</p>';
     if (p.penekanan) h += '<div class="penekanan">' + esc(p.penekanan) + '</div>';
     h += '<div class="catatan"><strong>Sebelum mulai:</strong><ul><li>' + esc(p.catatan) + '</li>' +
@@ -230,8 +237,13 @@ window.buatFormulir = function (app, OPSI) {
 
   function hPendaftar() {
     var h = '<div class="bagian-label">Bagian C</div><h2>Data Pendaftar</h2>';
-    h += fTeks('namaPendaftar', 'NAMA PENDAFTAR', { petunjuk: '<span style="display:block;background:#fef2f2;border:1px solid #fca5a5;border-left:4px solid #b91c1c;border-radius:8px;padding:8px 12px;color:#b91c1c;font-weight:800">⚠️ ISIKAN NAMA ANDA BUKAN NAMA ANAK/MURID ANDA</span>', ac: 'name', maks: 100 });
-    h += fRadio('peran', 'Peran', L.OPSI.peran, { petunjuk: 'Pilih peran Anda terhadap anak/murid yang didaftarkan.' });
+    var uld = L.pendaftarUld(D);
+    h += fTeks('namaPendaftar', 'NAMA PENDAFTAR', { petunjuk: '<span style="display:block;background:#fef2f2;border:1px solid #fca5a5;border-left:4px solid #b91c1c;border-radius:8px;padding:8px 12px;color:#b91c1c;font-weight:800">' +
+      (uld ? '⚠️ ISIKAN NAMA ANDA SEBAGAI PETUGAS ULD KOTA, BUKAN NAMA ANAK/MURID' : '⚠️ ISIKAN NAMA ANDA BUKAN NAMA ANAK/MURID ANDA') + '</span>', ac: 'name', maks: 100 });
+    h += fRadio('peran', 'Peran', L.OPSI.peran, { petunjuk: 'Pilih peran Anda terhadap anak/murid yang didaftarkan. Petugas ULD Kota yang mendaftarkan murid pilih <strong>ULD Kota</strong>.' });
+    if (uld) h += fPilih('asalUld', 'Asal ULD Kota', L.daftarUld(), { petunjuk: ULD_LINK && D.asalUld === ULD_LINK
+      ? 'Terisi otomatis dari link khusus ULD Kota Anda. Ubah bila tidak sesuai.'
+      : 'Pilih Suku Dinas Pendidikan tempat ULD Kota Anda bertugas.' });
     h += '<div class="grid-2">' + fTeks('hp', 'Nomor HP', { tipe: 'tel', ac: 'tel', im: 'tel', ph: '0812-3456-7890', petunjuk: 'Nomor aktif WhatsApp.' }) +
       fTeks('email', 'Email Aktif', { tipe: 'email', ac: 'email', im: 'email', ph: 'nama@gmail.com', petunjuk: 'Untuk informasi jadwal.' }) + '</div>';
     return h;
@@ -270,6 +282,11 @@ window.buatFormulir = function (app, OPSI) {
         otomatis('info-wali-otomatis', 'Data orang tua diambil otomatis dari identitas pendaftar.',
           [['namaWaliOtomatis', 'Nama Orang Tua/Wali', w.nama], ['hubunganWaliOtomatis', 'Peran/Hubungan dengan Anak', w.hubungan],
            ['hpWaliOtomatis', 'Nomor HP Orang Tua/Wali', L.tampilHP(w.hp), 'tel']]) + '</div>';
+    } else if (L.pendaftarUld(D)) {
+      // ULD Kota: kontak guru dan orang tua/wali murid diisi manual oleh petugas
+      h += '<p class="petunjuk">ℹ️ Isi kontak guru dan orang tua/wali murid agar ULD Dinas Pendidikan dapat menghubungi mereka secara langsung.</p>';
+      h += '<div class="sub"><h3>1. Kontak Guru</h3>' + guruManual + '</div>';
+      h += '<div class="sub"><h3>2. Kontak Orang Tua/Wali Murid</h3>' + waliManual('Orang Tua/Wali Murid') + '</div>';
     } else {
       // Anggota Keluarga Lainnya: semua kontak wajib diisi manual
       h += '<div class="sub"><h3>1. Kontak Guru</h3>' + guruManual + '</div>';
@@ -399,7 +416,7 @@ window.buatFormulir = function (app, OPSI) {
     if (ADMIN) h += blok('Tanggal Pendaftaran', -1, baris('Tanggal & jam pendaftaran', formatTanggal(String(D.waktuDaftarAdmin).slice(0, 10)) + ' pukul ' + String(D.waktuDaftarAdmin).slice(11) + ' WIB'));
     h += blok('Pertanyaan Pembuka', 0, baris('Pernah konsultasi di ULD', a.pernahKonsultasi) + baris('Punya hasil screening/diagnosa', a.punyaScreening));
     h += blok('Kelayakan Pendaftaran', 1, baris(LABEL_B.sudahSekolah, a.sudahSekolah) + baris(LABEL_B.sekolahJakarta, a.sekolahJakarta) + baris(LABEL_B.ktpJakarta, a.ktpJakarta) + baris('Catatan', a.prioritas));
-    h += blok('Data Pendaftar', 2, baris('Nama pendaftar', a.namaPendaftar) + baris('Peran', a.peran) + baris('Nomor HP', L.tampilHP(a.hp)) + baris('Email', a.email));
+    h += blok('Data Pendaftar', 2, baris('Nama pendaftar', a.namaPendaftar) + baris('Peran', L.teksPeran(a)) + baris('Nomor HP', L.tampilHP(a.hp)) + baris('Email', a.email));
     h += blok('Kontak Lainnya', 3, baris('Nama guru', a.namaGuru) + baris('Nomor HP guru', L.tampilHP(a.hpGuru)) + baris('Nama orang tua/wali', a.namaWali) + baris('Hubungan dengan anak', a.hubunganWali) + baris('Nomor HP orang tua/wali', L.tampilHP(a.hpWali)));
     h += blok('Identitas Anak/Murid', 4, baris('NPSN', a.npsn) + baris('Nama sekolah', a.namaSekolah ? a.namaSekolah + (D.sekolahManual === true ? ' (perlu verifikasi)' : '') : a.statusSekolah) +
       baris('Nama anak/murid', a.namaAnak) + baris('NISN', a.nisn + (a.ketNisn ? ' (' + a.ketNisn + ')' : '')) + baris('Jenis kelamin', a.jenisKelamin) + baris('Tempat, tanggal lahir', a.tempatLahir + ', ' + formatTanggal(a.tanggalLahir)) + baris('Usia', a.usia) +
@@ -547,7 +564,7 @@ window.buatFormulir = function (app, OPSI) {
     adminInput: ['waktuDaftarAdmin'],
     pembuka: ['pernahKonsultasi', 'punyaScreening'],
     kelayakan: ['sudahSekolah', 'sekolahJakarta', 'ktpJakarta'],
-    pendaftar: ['namaPendaftar', 'peran', 'hp', 'email'],
+    pendaftar: ['namaPendaftar', 'peran', 'asalUld', 'hp', 'email'],
     kontak: ['namaGuru', 'hpGuru', 'namaWali', 'hubunganWali', 'hpWali'],
     anak: ['npsn', 'namaSekolahManual', 'namaAnak', 'nisn', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'namaAyah', 'namaIbu', 'layanan', 'kondisi', 'pernahTes'],
     berkas: ['jenisDokumen', 'berkas', 'tautanBerkas', 'modeBerkas']
@@ -626,7 +643,7 @@ window.buatFormulir = function (app, OPSI) {
       D[k] = t.value; susunTanggalLahir();
       var u = document.getElementById('usia'); if (u) u.innerHTML = teksUsia();
       if (galat.tanggalLahir && D.tanggalLahir) { delete galat.tanggalLahir; render(t.id); }
-    } else if (t.tagName === 'SELECT') { D[k] = t.value; }
+    } else if (t.tagName === 'SELECT') { D[k] = t.value; if (galat[k] && t.value) { delete galat[k]; render(t.id); } }
   });
 
   app.addEventListener('input', function (ev) {

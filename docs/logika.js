@@ -18,9 +18,9 @@ function buatLogika(CFG) {
   var OPSI = {
     yaTidak: ['Ya', 'Tidak'],
     sudahBelum: ['Sudah', 'Belum'],
-    peran: ['Kepala Sekolah', 'Guru', 'Orang Tua', 'Anggota Keluarga Lainnya'],
+    peran: ['Kepala Sekolah', 'Guru', 'Orang Tua', 'Anggota Keluarga Lainnya', 'ULD Kota'],
     // Khusus panel admin: koreksi peran bila yang mengisi formulir ternyata murid sendiri
-    peranAdmin: ['Kepala Sekolah', 'Guru', 'Orang Tua', 'Anggota Keluarga Lainnya', 'Murid (didaftarkan guru)', 'Murid (didaftarkan orang tua)'],
+    peranAdmin: ['Kepala Sekolah', 'Guru', 'Orang Tua', 'Anggota Keluarga Lainnya', 'ULD Kota', 'Murid (didaftarkan guru)', 'Murid (didaftarkan orang tua)'],
     jenisKelamin: ['Laki-Laki', 'Perempuan'],
     layanan: [
       'Tes IQ',
@@ -39,7 +39,10 @@ function buatLogika(CFG) {
       ['Laporan Terapis', 'LAPORAN_TERAPIS']
     ],
     jenjangRekap: ['PAUD/TK', 'SD/MI', 'SMP/MTs', 'SMA/MA', 'SMK', 'SLB', 'Lainnya'],
-    wilayahSudin: ['Jakarta Pusat', 'Jakarta Utara', 'Jakarta Barat', 'Jakarta Selatan', 'Jakarta Timur', 'Kepulauan Seribu']
+    wilayahSudin: ['Jakarta Pusat', 'Jakarta Utara', 'Jakarta Barat', 'Jakarta Selatan', 'Jakarta Timur', 'Kepulauan Seribu'],
+    // Asal ULD Kota bawaan (dipakai bila kolom Sudin di Data Sekolah masih kosong)
+    uldBawaan: ['Jakarta Pusat I', 'Jakarta Pusat II', 'Jakarta Utara I', 'Jakarta Utara II', 'Jakarta Barat I', 'Jakarta Barat II',
+      'Jakarta Selatan I', 'Jakarta Selatan II', 'Jakarta Timur I', 'Jakarta Timur II', 'Kepulauan Seribu']
   };
 
   var LANGKAH = [
@@ -157,6 +160,38 @@ function buatLogika(CFG) {
   }
   /** Orang Tua: kontak orang tua/wali = identitas pendaftar (read only). */
   function pendaftarOrangTua(d) { return d.peran === 'Orang Tua'; }
+  /** Petugas ULD Kota: wajib memilih asal ULD Kota; kontak guru & orang tua/wali diisi manual. */
+  function pendaftarUld(d) { return d.peran === 'ULD Kota'; }
+
+  // ---------------- ULD Kota ----------------
+  var KODE_KOTA = { 'Jakarta Pusat': 'jakpus', 'Jakarta Utara': 'jakut', 'Jakarta Barat': 'jakbar', 'Jakarta Selatan': 'jaksel', 'Jakarta Timur': 'jaktim', 'Kepulauan Seribu': 'kepseribu' };
+  /** Teks Sudin dari Data Sekolah → nama singkat ULD Kota. "Sudin Pendidikan Wilayah II Kota Adm. Jakarta Barat" → "Jakarta Barat II". */
+  function labelUld(sudin) {
+    var t = ' ' + String(sudin || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ') + ' ';
+    var kota = wilayahSudin(sudin, '');
+    if (!kota) return '';
+    if (kota === 'Kepulauan Seribu') return kota;
+    var w = / (WILAYAH|WIL) (II|2) /.test(t) ? 'II' : / (WILAYAH|WIL) (I|1) /.test(t) ? 'I' : / (II|2) $/.test(t) ? 'II' : / (I|1) $/.test(t) ? 'I' : '';
+    return kota + (w ? ' ' + w : '');
+  }
+  /** Daftar asal ULD Kota (dari konfigurasi server; bila kosong memakai daftar bawaan). */
+  function daftarUld() { return CFG.DAFTAR_ULD && CFG.DAFTAR_ULD.length ? CFG.DAFTAR_ULD : OPSI.uldBawaan; }
+  /** "Jakarta Barat I" → "jakbar1" (untuk link khusus ?uld=jakbar1). */
+  function kodeUld(label) {
+    var m = /^(.*?)(?: (I{1,2}))?$/.exec(String(label || '').trim());
+    var kota = m[1], k = KODE_KOTA[kota];
+    if (!k) return String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return k + (m[2] ? m[2].length : '');
+  }
+  function uldDariKode(kode) {
+    kode = String(kode || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!kode) return '';
+    var d = daftarUld();
+    for (var i = 0; i < d.length; i++) if (kodeUld(d[i]) === kode) return d[i];
+    return '';
+  }
+  /** Teks peran untuk tampilan: "ULD Kota · Jakarta Barat I". */
+  function teksPeran(d) { return pendaftarUld(d) && d.asalUld ? 'ULD Kota · ' + d.asalUld : (d.peran || ''); }
   function kontakWali(d) {
     if (pendaftarOrangTua(d)) return { nama: rapikan(d.namaPendaftar), hubungan: 'Orang Tua', hp: d.hp || '', otomatis: true };
     return { nama: d.namaWali || '', hubungan: d.hubunganWali || '', hp: d.hpWali || '', otomatis: false };
@@ -288,6 +323,10 @@ function buatLogika(CFG) {
     if (id === 'pendaftar') {
       teks('namaPendaftar', true, 3, 100);
       pilih('peran', OPSI.peran);
+      if (pendaftarUld(d)) {
+        if (!isi(d.asalUld)) e.asalUld = 'Pilih asal ULD Kota Anda.';
+        else if (daftarUld().indexOf(d.asalUld) === -1) e.asalUld = 'Pilih asal ULD Kota dari daftar yang tersedia.';
+      }
       hp('hp', true);
       if (!isi(d.email)) e.email = 'Email wajib diisi.';
       else if (!emailValid(d.email)) e.email = 'Format email tidak valid, contoh: nama@gmail.com.';
@@ -381,6 +420,7 @@ function buatLogika(CFG) {
       'namaAnak', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'namaAyah', 'namaIbu', 'layanan', 'pernahTes'
     ].forEach(function (f) { o[f] = rapikan(d[f]); });
     o.kondisi = String(d.kondisi || '').trim();
+    o.asalUld = pendaftarUld(d) ? rapikan(d.asalUld) : '';
     o.email = rapikan(d.email).toLowerCase();
     o.hp = normalisasiHP(d.hp);
     var g = kontakGuru(d);
@@ -412,6 +452,7 @@ function buatLogika(CFG) {
     parseTanggal: parseTanggal, hitungUsia: hitungUsia, alurPembuka: alurPembuka, alurKelayakan: alurKelayakan,
     perluNPSN: perluNPSN, pendaftarSekolah: pendaftarSekolah, kontakGuru: kontakGuru,
     pendaftarOrangTua: pendaftarOrangTua, kontakWali: kontakWali,
+    pendaftarUld: pendaftarUld, labelUld: labelUld, daftarUld: daftarUld, kodeUld: kodeUld, uldDariKode: uldDariKode, teksPeran: teksPeran,
     statusAwal: statusAwal, teksPrioritas: teksPrioritas, infoBerkas: infoBerkas,
     slugNama: slugNama, namaFileBerkas: namaFileBerkas,
     kategoriJenjang: kategoriJenjang, wilayahSudin: wilayahSudin, usiaTahun: usiaTahun,
